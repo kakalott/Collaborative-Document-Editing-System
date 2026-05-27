@@ -3,6 +3,7 @@ export interface Operation {
     type: OpType;
     position: number;
     char?: string;
+    length?: number;
     clientId: string;
     documentId: string;
     revision: number;

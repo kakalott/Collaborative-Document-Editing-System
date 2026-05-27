@@ -77,7 +77,7 @@ let SocketGateway = class SocketGateway {
             console.log(`[OT] Transform op từ revision ${revision} → ${state.revision}`);
             transformedOp = (0, ot_engine_1.transformAgainstHistory)(op, state.history, revision);
         }
-        if (transformedOp.position === -1) {
+        if (transformedOp.position === -1 || (transformedOp.type === 'delete' && transformedOp.length === 0)) {
             console.log(`[OT] Op trở thành no-op sau transform, bỏ qua.`);
             client.emit('ack', { revision: state.revision });
             return;
@@ -134,6 +134,19 @@ let SocketGateway = class SocketGateway {
             const state = this.docStates.get(documentData.documentId);
             if (state && documentData.title !== undefined) {
                 state.title = documentData.title;
+            }
+            const document = await this.documentService.getDocumentById(documentData.documentId);
+            if (document) {
+                await this.userService.mapClientIdToUserId(documentData.fullname, documentData.email, documentData.clientId);
+                const user = await this.userService.getClientInfoByClientId(documentData.clientId);
+                const userId = user._id.toString();
+                if (userId !== document.userId.toString()) {
+                    const collaborators = document.collaborators || [];
+                    if (!collaborators.map((c) => c.toString()).includes(userId)) {
+                        const updatedCollaborators = [...collaborators, userId];
+                        await this.documentService.updateDocument(documentData.documentId, { collaborators: updatedCollaborators }, userId);
+                    }
+                }
             }
             await this.autoSaveDocument(documentData.documentId);
             client.emit('save-document-success', {

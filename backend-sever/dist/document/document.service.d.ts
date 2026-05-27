@@ -35,6 +35,7 @@ export declare class DocumentService {
     getAllDocuments(): Promise<IDocument[]>;
     getDocumentById(id: string): Promise<IDocument>;
     getDocumentsByUserId(userId: string): Promise<IDocument[]>;
+    getDocumentsForUser(userId: string): Promise<IDocument[]>;
     createDocument(documentDto: DocumentDto): Promise<IDocument>;
     hasAccess: (userId: string, document: IDocument) => boolean;
     updateDocument(id: string, updateDocumentDto: UpdateDocumentDto, userId: string): Promise<IDocument>;

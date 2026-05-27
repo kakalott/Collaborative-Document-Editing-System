@@ -51,6 +51,14 @@ let DocumentController = DocumentController_1 = class DocumentController {
         }
         return documents;
     }
+    async getDocumentsForUser(userId) {
+        this.logger.log(`document controller - getDocumentsForUser, ${userId}`);
+        if (!(0, mongoose_1.isValidObjectId)(userId)) {
+            throw new common_1.NotFoundException('Invalid userId ID... Please provide correct user Id');
+        }
+        const documents = await this.documentService.getDocumentsForUser(userId);
+        return documents;
+    }
     async createDocument(documentDto) {
         return await this.documentService.createDocument(documentDto);
     }
@@ -102,6 +110,14 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], DocumentController.prototype, "getDocumentsByUserId", null);
+__decorate([
+    (0, common_1.Get)('/user-all/:userId'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], DocumentController.prototype, "getDocumentsForUser", null);
 __decorate([
     (0, common_1.Post)(),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),

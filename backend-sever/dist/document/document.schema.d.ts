@@ -28,7 +28,7 @@ export interface IDocument extends mongoose.Document {
     userId: mongoose.Schema.Types.ObjectId;
     title: string;
     content: string;
-    collaborators: [mongoose.Schema.Types.ObjectId];
+    collaborators: mongoose.Schema.Types.ObjectId[];
 }
 export declare const DocumentSchema: mongoose.Schema<any, mongoose.Model<any, any, any, any, any, any>, {}, {}, {}, {}, mongoose.DefaultSchemaOptions, {
     userId: mongoose.Types.ObjectId;

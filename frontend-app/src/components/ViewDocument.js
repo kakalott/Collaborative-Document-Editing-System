@@ -11,13 +11,24 @@ const ViewDocument = () => {
   const [expandedDocumentId, setExpandedDocumentId] = useState(null);
   const { user: loggedInUser } = useAuth();
 
+  const getOwnerLabel = (doc) => {
+    const owner = doc.userId;
+    if (!owner) return 'Không rõ';
+    if (typeof owner === 'object') {
+      if (owner._id?.toString() === loggedInUser?._id) return 'Bạn';
+      return owner.fullname || owner.email || owner._id?.toString();
+    }
+    if (typeof owner === 'string' && owner === loggedInUser?._id) return 'Bạn';
+    return owner;
+  };
+
   useEffect(() => {
     const fetchUserDocuments = async () => {
       if (!loggedInUser) return;
       const accessToken = localStorage.getItem("accessToken");
       try {
         const res = await axios.get(
-          `http://localhost:3000/documents/getDocumentsByUserId/${loggedInUser._id}`,
+          `http://localhost:3000/documents/user-all/${loggedInUser._id}`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
         setDocumentList(res.data);
@@ -60,14 +71,19 @@ const ViewDocument = () => {
     <div>
       <Header />
       <div className="container mx-auto px-4 py-8 max-w-3xl">
-        <h1 className="text-2xl font-bold mb-6">Tài liệu của bạn</h1>
+        <h1 className="text-2xl font-bold mb-6">Tài liệu của bạn và tài liệu được chia sẻ</h1>
 
         {Array.isArray(documentList) && documentList.length > 0 ? (
           <ul className="space-y-3">
             {documentList.map((doc) => (
               <li key={doc._id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="font-medium text-gray-800">📄 {doc.title}</span>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <span className="font-medium text-gray-800">📄 {doc.title}</span>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Chủ tài liệu: {getOwnerLabel(doc)}
+                    </p>
+                  </div>
                   <div className="flex gap-2 flex-wrap">
                     <button
                       className="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1.5 px-3 rounded"

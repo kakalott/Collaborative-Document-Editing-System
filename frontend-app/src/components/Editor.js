@@ -85,6 +85,7 @@ export default function Editor() {
   }, [loggedInUser, documentId, navigate]);
 
   // ─── Khởi tạo socket 1 lần, join room sau khi connected ─────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const socket = io("http://localhost:3000", { transports: ["websocket"] });
     socketRef.current = socket;

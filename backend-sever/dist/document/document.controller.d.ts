@@ -7,6 +7,7 @@ export declare class DocumentController {
     getAllDocuments(): Promise<import("./document.schema").IDocument[]>;
     getDocumentById(id: string): Promise<import("./document.schema").IDocument>;
     getDocumentsByUserId(userId: string): Promise<import("./document.schema").IDocument[]>;
+    getDocumentsForUser(userId: string): Promise<import("./document.schema").IDocument[]>;
     createDocument(documentDto: DocumentDto): Promise<import("./document.schema").IDocument>;
     updateDocument(id: string, updateDocumentDto: UpdateDocumentDto, userId: string): Promise<import("./document.schema").IDocument>;
     deleteDocument(id: string): Promise<void>;

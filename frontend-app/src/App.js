@@ -9,7 +9,19 @@ import { ToastContainer } from "react-toastify";
 function App() {
   return (
     <div className="min-h-screen gradient-text bg-gradient-to-r from-blue-400 to-blue-100">
-      <ToastContainer autoClose={3000} style={{ zIndex: 9999 }} />
+      <ToastContainer 
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        style={{ zIndex: 9999 }}
+        theme="light"
+      />
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />

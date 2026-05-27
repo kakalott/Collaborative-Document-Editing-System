@@ -25,6 +25,7 @@ export interface Operation {
   type: OpType;
   position: number;   // vị trí trong chuỗi (0-indexed)
   char?: string;      // ký tự cần chèn (chỉ dùng khi type = 'insert')
+  length?: number;    // số ký tự cần xóa (chỉ dùng khi type = 'delete', mặc định = 1)
   clientId: string;   // socket.id của người gửi
   documentId: string; // ID tài liệu
   revision: number;   // revision của document tại thời điểm client gửi
@@ -52,7 +53,9 @@ export function applyOperation(content: string, op: Operation): string {
     if (op.position < 0 || op.position >= content.length) {
       return content; // vị trí không hợp lệ, bỏ qua
     }
-    return content.slice(0, op.position) + content.slice(op.position + 1);
+    const deleteLen = op.length ?? 1; // Mặc định xóa 1 ký tự nếu không có length
+    const endPos = Math.min(op.position + deleteLen, content.length);
+    return content.slice(0, op.position) + content.slice(endPos);
   }
 
   return content;
@@ -67,6 +70,8 @@ export function applyOperation(content: string, op: Operation): string {
  */
 export function transform(incoming: Operation, applied: Operation): Operation {
   const result = { ...incoming };
+  const appliedLen = applied.length ?? 1;
+  const incomingLen = incoming.length ?? 1;
 
   // Cả hai đều là insert
   if (applied.type === 'insert' && incoming.type === 'insert') {
@@ -75,14 +80,10 @@ export function transform(incoming: Operation, applied: Operation): Operation {
       result.position += 1;
     } else if (applied.position === incoming.position) {
       // Cùng vị trí: ưu tiên theo clientId (tie-breaking deterministic)
-      // Client có clientId nhỏ hơn (lexicographic) "thắng" → giữ nguyên vị trí
-      // Client kia bị đẩy sang phải
       if (applied.clientId < incoming.clientId) {
         result.position += 1;
       }
-      // Nếu applied.clientId >= incoming.clientId → không dịch
     }
-    // applied.position > incoming.position → không ảnh hưởng
   }
 
   // applied là insert, incoming là delete
@@ -96,19 +97,26 @@ export function transform(incoming: Operation, applied: Operation): Operation {
   // applied là delete, incoming là insert
   if (applied.type === 'delete' && incoming.type === 'insert') {
     if (applied.position < incoming.position) {
-      // applied xoá ký tự trước vị trí insert → insert dịch trái 1
-      result.position -= 1;
+      // applied xoá ký tự(s) trước vị trí insert → insert dịch trái
+      result.position = Math.max(applied.position, incoming.position - appliedLen);
     }
   }
 
   // Cả hai đều là delete
   if (applied.type === 'delete' && incoming.type === 'delete') {
     if (applied.position < incoming.position) {
-      // applied xoá ký tự trước vị trí của incoming → dịch trái 1
-      result.position -= 1;
-    } else if (applied.position === incoming.position) {
-      // Cùng xoá một ký tự → incoming trở thành no-op (đánh dấu position = -1)
-      result.position = -1;
+      // applied xoá ký tự(s) trước vị trí của incoming → dịch trái
+      result.position = Math.max(applied.position, incoming.position - appliedLen);
+    } else if (applied.position < incoming.position + incomingLen && incoming.position <= applied.position) {
+      // Có overlap: incoming xóa từ region mà applied xóa
+      // Tính toán vị trí mới sau khi xóa chồng lấp
+      result.position = applied.position;
+      // Giảm length của incoming nếu applied xóa phần của nó
+      const overlap = Math.min(incoming.position + incomingLen, applied.position + appliedLen) - Math.max(incoming.position, applied.position);
+      result.length = Math.max(0, incomingLen - overlap);
+      if (result.length === 0) {
+        result.position = -1; // no-op
+      }
     }
   }
 
@@ -132,7 +140,8 @@ export function transformAgainstHistory(
   const relevantHistory = history.slice(fromRevision);
   for (const pastOp of relevantHistory) {
     op = transform(op, pastOp);
-    if (op.position === -1) break; // no-op, dừng sớm
+    // Dừng sớm nếu trở thành no-op
+    if (op.position === -1 || (op.type === 'delete' && op.length === 0)) break;
   }
   return op;
 }

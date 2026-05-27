@@ -49,6 +49,19 @@ let DocumentService = DocumentService_1 = class DocumentService {
         console.log(documents);
         return documents;
     }
+    async getDocumentsForUser(userId) {
+        const documents = await this.documentModel
+            .find({
+            $or: [
+                { userId: userId },
+                { collaborators: userId },
+            ],
+        })
+            .populate('userId', 'fullname email')
+            .exec();
+        console.log(`getDocumentsForUser for ${userId}:`, documents);
+        return documents;
+    }
     async createDocument(documentDto) {
         const { userId } = documentDto;
         const newDocument = new this.documentModel(documentDto);

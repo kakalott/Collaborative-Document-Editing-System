@@ -62,6 +62,19 @@ export class DocumentController {
     return documents;
   }
 
+  @Get('/user-all/:userId')
+  @UseGuards(JwtAuthGuard)
+  async getDocumentsForUser(@Param('userId') userId: string) {
+    this.logger.log(`document controller - getDocumentsForUser, ${userId}`);
+    if (!isValidObjectId(userId)) {
+      throw new NotFoundException(
+        'Invalid userId ID... Please provide correct user Id',
+      );
+    }
+    const documents = await this.documentService.getDocumentsForUser(userId);
+    return documents; // Trả về mảng rỗng nếu không có tài liệu
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   async createDocument(@Body() documentDto: DocumentDto) {

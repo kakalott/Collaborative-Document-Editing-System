@@ -42,6 +42,21 @@ export class DocumentService {
     return documents;
   }
 
+  async getDocumentsForUser(userId: string): Promise<IDocument[]> {
+    // Lấy tài liệu mà user tạo (userId) hoặc user tham gia (collaborators)
+    const documents = await this.documentModel
+      .find({
+        $or: [
+          { userId: userId }, // Tài liệu mà user tạo
+          { collaborators: userId }, // Tài liệu mà user tham gia chỉnh sửa
+        ],
+      })
+      .populate('userId', 'fullname email') // Populate thông tin chủ tài liệu
+      .exec();
+    console.log(`getDocumentsForUser for ${userId}:`, documents);
+    return documents;
+  }
+
   async createDocument(documentDto: DocumentDto): Promise<IDocument> {
     const { userId } = documentDto;
     const newDocument = new this.documentModel(documentDto);

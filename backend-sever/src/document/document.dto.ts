@@ -1,4 +1,5 @@
 import { IsNotEmpty, IsOptional } from 'class-validator';
+import mongoose from 'mongoose';
 
 export class DocumentDto {
   @IsNotEmpty()
@@ -11,7 +12,7 @@ export class DocumentDto {
   content?: string;
 
   @IsOptional()
-  collaborators?: [string];
+  collaborators?: Array<string | mongoose.Schema.Types.ObjectId>;
 }
 
 export class UpdateDocumentDto {
@@ -22,5 +23,5 @@ export class UpdateDocumentDto {
   content?: string;
 
   @IsOptional()
-  collaborators?: [string];
+  collaborators?: Array<string | mongoose.Schema.Types.ObjectId>;
 }

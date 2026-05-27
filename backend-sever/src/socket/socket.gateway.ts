@@ -156,8 +156,8 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       transformedOp = transformAgainstHistory(op, state.history, revision);
     }
 
-    // No-op (position = -1 sau transform, tức là xung đột đã xử lý)
-    if (transformedOp.position === -1) {
+    // No-op (position = -1 sau transform, hoặc delete với length = 0)
+    if (transformedOp.position === -1 || (transformedOp.type === 'delete' && transformedOp.length === 0)) {
       console.log(`[OT] Op trở thành no-op sau transform, bỏ qua.`);
       // Vẫn cần ack client để client biết revision hiện tại
       client.emit('ack', { revision: state.revision });
@@ -247,6 +247,35 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (state && documentData.title !== undefined) {
         state.title = documentData.title;
       }
+      
+      // Lấy thông tin document để kiểm tra owner
+      const document = await this.documentService.getDocumentById(documentData.documentId);
+      if (document) {
+        // Map clientId → userId
+        await this.userService.mapClientIdToUserId(
+          documentData.fullname,
+          documentData.email,
+          documentData.clientId,
+        );
+        const user = await this.userService.getClientInfoByClientId(
+          documentData.clientId,
+        );
+        const userId = user._id.toString();
+        
+        // Nếu user không phải owner, thêm vào collaborators
+        if (userId !== document.userId.toString()) {
+          const collaborators = document.collaborators || [];
+          if (!collaborators.map((c) => c.toString()).includes(userId)) {
+            const updatedCollaborators = [...collaborators, userId];
+            await this.documentService.updateDocument(
+              documentData.documentId,
+              { collaborators: updatedCollaborators },
+              userId,
+            );
+          }
+        }
+      }
+      
       await this.autoSaveDocument(documentData.documentId);
       client.emit('save-document-success', {
         title: documentData.title,
