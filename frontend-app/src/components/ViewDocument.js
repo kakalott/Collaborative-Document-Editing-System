@@ -3,132 +3,128 @@ import axios from "axios";
 import { useAuth } from "./AuthProvider";
 import Header from "./Header";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 const ViewDocument = () => {
   const navigate = useNavigate();
   const [documentList, setDocumentList] = useState([]);
-  const [expandedDocumentId, setExpandedDocumentId] = useState(null); // Track expanded document ID
+  const [expandedDocumentId, setExpandedDocumentId] = useState(null);
   const { user: loggedInUser } = useAuth();
 
   useEffect(() => {
     const fetchUserDocuments = async () => {
-      if (loggedInUser) {
-        const accessToken = localStorage.getItem("accessToken");
-        const config = {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        };
-
-        try {
-          const userDocumentsResponse = await axios.get(
-            `http://localhost:3000/documents/getDocumentsByUserId/${loggedInUser._id}`,
-            config
-          );
-          console.log("documents response :", userDocumentsResponse.data);
-          setDocumentList(userDocumentsResponse.data);
-        } catch (error) {
-          console.error("Error fetching documents:", error);
-        }
+      if (!loggedInUser) return;
+      const accessToken = localStorage.getItem("accessToken");
+      try {
+        const res = await axios.get(
+          `http://localhost:3000/documents/getDocumentsByUserId/${loggedInUser._id}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        setDocumentList(res.data);
+      } catch (error) {
+        console.error("Lỗi khi tải danh sách tài liệu:", error);
       }
     };
-
     fetchUserDocuments();
   }, [loggedInUser]);
 
   const handleDeleteDocument = async (documentId) => {
-    console.log("inside handleDeleteDocument :", documentId);
     const accessToken = localStorage.getItem("accessToken");
-    const config = {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    };
-
     try {
       await axios.delete(
         `http://localhost:3000/documents/deleteDocument/${documentId}`,
-        config
+        { headers: { Authorization: `Bearer ${accessToken}` } }
       );
-      // Remove the deleted document from the documentList
-      setDocumentList((prevList) =>
-        prevList.filter((document) => document._id !== documentId)
-      );
-      alert("Document deleted successfully");
+      setDocumentList((prev) => prev.filter((d) => d._id !== documentId));
+      toast.success("Đã xoá tài liệu");
     } catch (error) {
-      console.error("Error deleting document:", error);
-      alert("Failed to delete the document");
+      toast.error("Xoá thất bại");
     }
   };
 
-  const handleToggleExpand = (documentId) => {
-    if (expandedDocumentId === documentId) {
-      // Collapse the document content if already expanded
-      setExpandedDocumentId(null);
-    } else {
-      // Expand the document content
-      setExpandedDocumentId(documentId);
-    }
+  const handleOpenDocument = (doc) => {
+    // Dùng URL-based route — dễ share link
+    navigate(`/editor/${doc._id}`, {
+      state: { title: doc.title, content: doc.content },
+    });
+  };
+
+  // Copy share link trực tiếp từ danh sách
+  const handleCopyLink = (docId) => {
+    const link = `${window.location.origin}/editor/${docId}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Đã copy link chia sẻ!");
   };
 
   return (
     <div>
       <Header />
-      {Array.isArray(documentList) && documentList.length > 0 ? (
-        <div>
-          <h1 className="text-2xl font-bold mb-4 mt-5">
-            Listing all documents
-          </h1>
+      <div className="container mx-auto px-4 py-8 max-w-3xl">
+        <h1 className="text-2xl font-bold mb-6">Tài liệu của bạn</h1>
 
-          <ul className="space-y-4">
-            {documentList.map((document) => (
-              <li key={document._id} className="bg-gray-100 p-4 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <span className="flex-grow mr-4">{document.title}</span>
-                  <div className="flex space-x-2">
+        {Array.isArray(documentList) && documentList.length > 0 ? (
+          <ul className="space-y-3">
+            {documentList.map((doc) => (
+              <li key={doc._id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="font-medium text-gray-800">📄 {doc.title}</span>
+                  <div className="flex gap-2 flex-wrap">
                     <button
-                      className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                      onClick={() => handleToggleExpand(document._id)}
+                      className="bg-blue-500 hover:bg-blue-700 text-white text-sm font-bold py-1.5 px-3 rounded"
+                      onClick={() => handleOpenDocument(doc)}
                     >
-                      {expandedDocumentId === document._id
-                        ? "Collapse"
-                        : "View"}
+                      ✏️ Mở & Chỉnh sửa
+                    </button>
+                    {/* Nút copy share link */}
+                    <button
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-bold py-1.5 px-3 rounded"
+                      onClick={() => handleCopyLink(doc._id)}
+                    >
+                      🔗 Copy link
                     </button>
                     <button
-                      className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-                      onClick={() => handleDeleteDocument(document._id)}
+                      className="bg-green-500 hover:bg-green-700 text-white text-sm font-bold py-1.5 px-3 rounded"
+                      onClick={() => setExpandedDocumentId(expandedDocumentId === doc._id ? null : doc._id)}
                     >
-                      Delete
+                      {expandedDocumentId === doc._id ? "Thu gọn" : "Xem"}
+                    </button>
+                    <button
+                      className="bg-red-500 hover:bg-red-700 text-white text-sm font-bold py-1.5 px-3 rounded"
+                      onClick={() => handleDeleteDocument(doc._id)}
+                    >
+                      Xoá
                     </button>
                   </div>
                 </div>
-                {expandedDocumentId === document._id && (
-                  <div className="mt-4 bg-gray-200 p-4 rounded">
-                    <p>{document.content}</p>
+
+                {expandedDocumentId === doc._id && (
+                  <div className="mt-3 bg-gray-50 p-3 rounded text-sm text-gray-700 whitespace-pre-wrap">
+                    {doc.content || "(Tài liệu trống)"}
                   </div>
                 )}
               </li>
             ))}
           </ul>
+        ) : (
+          <p className="text-center text-gray-500 mt-10">
+            Chưa có tài liệu nào. Hãy tạo tài liệu mới!
+          </p>
+        )}
+
+        <div className="flex gap-3 mt-8 justify-center">
+          <button
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded"
+            onClick={() => navigate("/editor")}
+          >
+            + Tạo tài liệu mới
+          </button>
+          <button
+            className="bg-gray-400 hover:bg-gray-600 text-white font-bold py-2 px-5 rounded"
+            onClick={() => navigate("/")}
+          >
+            Trang chủ
+          </button>
         </div>
-      ) : (
-        <h1 className="text-2xl text-center font-bold mb-4 text-red-600">
-          All clear! No documents to display at the moment
-        </h1>
-      )}
-      <div className="flex space-x-2 mt-5 justify-center">
-        <button
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          onClick={() => navigate("/editor")}
-        >
-          Go back to Editor
-        </button>
-        <button
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          onClick={() => navigate("/")}
-        >
-          Home
-        </button>
       </div>
     </div>
   );

@@ -1,21 +1,29 @@
 import { OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { UserService } from '../user/user.service';
-import { DocumentService } from 'src/document/document.service';
+import { DocumentService } from "../document/document.service";
+import { Operation } from '../ot/ot-engine';
 export declare class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly userService;
     private readonly documentService;
     server: Server;
+    private docStates;
+    private saveTimers;
     constructor(userService: UserService, documentService: DocumentService);
     handleConnection(client: Socket): void;
-    handleJoinRoom(client: Socket, room: string): void;
+    handleDisconnect(client: Socket): void;
+    handleJoinDocument(client: Socket, payload: {
+        documentId: string;
+        fullname: string;
+        email: string;
+    }): Promise<void>;
+    handleOperation(client: Socket, op: Operation): Promise<void>;
+    private scheduleAutoSave;
+    private autoSaveDocument;
+    handleSaveDocument(client: Socket, documentData: any): Promise<void>;
     handleMessage(client: Socket, payload: {
         room: string;
         message: string;
-    }): void;
-    handleEditDocument(client: Socket, payload: {
-        room: string;
-        content: string;
     }): void;
     handleUserStartTyping(client: Socket, payload: {
         roomId: string;
@@ -27,9 +35,21 @@ export declare class SocketGateway implements OnGatewayConnection, OnGatewayDisc
         fullname: string;
         email: string;
     }): Promise<void>;
-    handleUpdateStyleBold(client: Socket, bold: boolean): void;
-    handleUpdateStyleItalic(client: Socket, italic: boolean): void;
-    handleUpdateStyleUnderline(client: Socket, underline: boolean): void;
-    createDocument(client: Socket, documentData: any): Promise<any>;
-    handleDisconnect(client: Socket): void;
+    handleTitleChange(client: Socket, payload: {
+        documentId: string;
+        title: string;
+    }): void;
+    handleBold(client: Socket, payload: {
+        documentId: string;
+        bold: boolean;
+    }): void;
+    handleItalic(client: Socket, payload: {
+        documentId: string;
+        italic: boolean;
+    }): void;
+    handleUnderline(client: Socket, payload: {
+        documentId: string;
+        underline: boolean;
+    }): void;
+    handleJoinRoom(client: Socket, room: string): void;
 }

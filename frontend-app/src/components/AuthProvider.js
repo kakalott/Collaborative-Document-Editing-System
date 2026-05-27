@@ -1,48 +1,46 @@
-// context/AuthContext.js
 import React, { createContext, useContext, useState } from "react";
 import axios from "axios";
-import { toast } from "react-toastify";
 
 const AuthContext = createContext();
-
 export const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem("user");
+    try {
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const register = async (formData) => {
     const { fullname, email, password } = formData;
-    const newUser = await axios.post("http://localhost:3000/users/register/", {
+    // POST /users/register — trả về user object từ MongoDB
+    const response = await axios.post("http://localhost:3000/users/register/", {
       fullname,
       email,
       password,
     });
-    console.log(
-      `New user ${newUser.fullname} registered successfully : ${JSON.stringify(
-        newUser
-      )}`
-    );
-    return newUser;
+    return response; // caller chỉ cần biết thành công hay không
   };
 
   const login = async (email, password) => {
-    const loggedInUserDetails = await axios.post(
-      "http://localhost:3000/auth/signin/",
-      {
-        email,
-        password,
-      }
-    );
-    console.log(`loggedInUserDetails ${JSON.stringify(loggedInUserDetails)}`);
-    const loggedInUser = loggedInUserDetails?.data?.user;
+    const res = await axios.post("http://localhost:3000/auth/signin/", {
+      email,
+      password,
+    });
+    const loggedInUser = res?.data?.user;
     setUser(loggedInUser);
-    // Store the access token securely (e.g., in localStorage)
-    localStorage.setItem("accessToken", loggedInUserDetails.data.access_token);
+    localStorage.setItem("user", JSON.stringify(loggedInUser));
+    localStorage.setItem("accessToken", res.data.access_token);
     return loggedInUser;
   };
 
   const logout = () => {
     setUser(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("accessToken");
   };
 
   return (

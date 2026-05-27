@@ -1,4 +1,4 @@
-import { IDocument } from 'src/document/document.schema';
+import { IDocument } from "../document/document.schema";
 export declare class UserDto {
     fullname: string;
     email: string;

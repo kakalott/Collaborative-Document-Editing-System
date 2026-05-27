@@ -1,297 +1,325 @@
-import React, { useState, useEffect } from "react";
-import io from "socket.io-client";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { io } from "socket.io-client";
 import { useAuth } from "./AuthProvider";
 import Header from "./Header";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
-const socket = io("http://localhost:3000"); // Connect to the backend server
+// ─── Tính delta giữa 2 chuỗi → danh sách operation nhỏ ──────────────────────
+function diffToOperations(oldStr, newStr, documentId, clientId, revision) {
+  let start = 0;
+  while (start < oldStr.length && start < newStr.length && oldStr[start] === newStr[start]) start++;
+  let oldEnd = oldStr.length;
+  let newEnd = newStr.length;
+  while (oldEnd > start && newEnd > start && oldStr[oldEnd - 1] === newStr[newEnd - 1]) { oldEnd--; newEnd--; }
 
-function Editor() {
+  const ops = [];
+  const deleted = oldStr.slice(start, oldEnd);
+  const inserted = newStr.slice(start, newEnd);
+  
+  // Nếu có deletion, tạo 1 operation delete với length (thay vì multiple operations)
+  if (deleted.length > 0) {
+    ops.push({ type: "delete", position: start, length: deleted.length, documentId, clientId, revision });
+  }
+  
+  // Chèn từng ký tự (giữ nguyên approach cũ)
+  for (let i = 0; i < inserted.length; i++)
+    ops.push({ type: "insert", position: start + i, char: inserted[i], documentId, clientId, revision });
+  return ops;
+}
+
+// ─── Áp dụng 1 operation lên chuỗi ──────────────────────────────────────────
+function applyOp(content, op) {
+  if (op.type === "insert" && op.position >= 0) {
+    const pos = Math.min(op.position, content.length);
+    return content.slice(0, pos) + (op.char ?? "") + content.slice(pos);
+  }
+  if (op.type === "delete" && op.position >= 0) {
+    if (op.position >= content.length) return content;
+    const deleteLen = op.length ?? 1; // Mặc định xóa 1 ký tự nếu không có length
+    const endPos = Math.min(op.position + deleteLen, content.length);
+    return content.slice(0, op.position) + content.slice(endPos);
+  }
+  return content;
+}
+
+export default function Editor() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { documentId: docIdFromUrl } = useParams();
   const { user: loggedInUser } = useAuth();
-  const loggedInUserFullName = loggedInUser?.fullname;
-  const [room, setRoom] = useState("");
-  const [messagesReceived, setMessagesReceived] = useState([]);
-  const [inputMessage, setInputMessage] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [documentTitle, setDocumentTitle] = useState("");
-  const [documentContent, setDocumentContent] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
 
+  const initialDocumentId = docIdFromUrl ?? location.state?.documentId ?? null;
+
+  const [documentId, setDocumentId] = useState(initialDocumentId);
+  const [title, setTitle] = useState(location.state?.title ?? "");
+  const [content, setContent] = useState(location.state?.content ?? "");
+  const [revision, setRevision] = useState(0);
+  const [activeUsers, setActiveUsers] = useState(1);
+  const [lastSaved, setLastSaved] = useState(null);
   const [bold, setBold] = useState(false);
   const [italic, setItalic] = useState(false);
   const [underline, setUnderline] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [connected, setConnected] = useState(false);
 
+  // Refs để tránh stale closure trong event handler
+  const contentRef = useRef(content);
+  const revisionRef = useRef(0);
+  const documentIdRef = useRef(documentId);
+  const isRemote = useRef(false);
+  const typingTimer = useRef(null);
+  const socketRef = useRef(null);
+
+  contentRef.current = content;
+  revisionRef.current = revision;
+  documentIdRef.current = documentId;
+
+  // ─── Kiểm tra Đăng nhập ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (loggedInUser) {
-      alert(`${loggedInUser.fullname} connected`);
+    if (!loggedInUser) {
+      toast.warning("Vui lòng đăng nhập trước để xem/chỉnh sửa tài liệu!");
+      const targetPath = documentId ? `/editor/${documentId}` : "/editor";
+      navigate("/", { state: { from: targetPath } });
     }
+  }, [loggedInUser, documentId, navigate]);
 
-    // Handle received messages
-    socket.on("received_message", (msg) => {
-      setMessagesReceived((prevMessages) => [...prevMessages, msg.message]);
+  // ─── Khởi tạo socket 1 lần, join room sau khi connected ─────────────────────
+  useEffect(() => {
+    const socket = io("http://localhost:3000", { transports: ["websocket"] });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("[Socket] Connected:", socket.id);
+      setConnected(true);
+
+      // Join room ngay sau khi connect — đảm bảo socket đã sẵn sàng
+      if (documentIdRef.current && loggedInUser) {
+        socket.emit("join-document", {
+          documentId: documentIdRef.current,
+          fullname: loggedInUser.fullname,
+          email: loggedInUser.email,
+        });
+      }
     });
 
-    // Handle document content updates
-    socket.on("document-content-update", (updatedContent) => {
-      setDocumentContent(updatedContent);
+    socket.on("disconnect", () => {
+      console.log("[Socket] Disconnected");
+      setConnected(false);
     });
+
+    // Nhận trạng thái ban đầu khi join room
+    socket.on("document-init", ({ content: c, revision: rev, title: t }) => {
+      console.log("[Socket] document-init, revision:", rev);
+      isRemote.current = true;
+      setContent(c ?? "");
+      setRevision(rev ?? 0);
+      revisionRef.current = rev ?? 0;
+      if (t !== undefined) setTitle(t);
+      isRemote.current = false;
+    });
+
+    // Nhận operation từ người khác → áp dụng trực tiếp
+    socket.on("remote-operation", ({ op, revision: newRev }) => {
+      isRemote.current = true;
+      setContent((prev) => applyOp(prev, op));
+      setRevision(newRev);
+      revisionRef.current = newRev;
+      isRemote.current = false;
+    });
+
+    // Nhận thay đổi tiêu đề từ người khác
+    socket.on("remote-title", ({ title: newTitle }) => {
+      setTitle(newTitle);
+    });
+
+    socket.on("ack", ({ revision: newRev }) => {
+      setRevision(newRev);
+      revisionRef.current = newRev;
+    });
+
+    socket.on("auto-saved", ({ savedAt }) => {
+      setLastSaved(new Date(savedAt).toLocaleTimeString("vi-VN"));
+    });
+
+    socket.on("save-document-success", (data) => {
+      if (data._id && !documentIdRef.current) {
+        setDocumentId(data._id);
+        documentIdRef.current = data._id;
+        window.history.replaceState(null, "", `/editor/${data._id}`);
+      }
+      toast.success(`Đã lưu "${data.title ?? title}"`);
+    });
+
+    socket.on("active-users", ({ count }) => setActiveUsers(count));
+    socket.on("user-joined", ({ fullname }) => toast.info(`${fullname} vừa tham gia`));
+    socket.on("user-left", () => setActiveUsers((n) => Math.max(1, n - 1)));
 
     socket.on("typing_indicator", ({ fullname, isTyping }) => {
-      setTypingUsers((prevUsers) => {
-        if (isTyping) {
-          // Add userId if it's not already in the list
-          if (!prevUsers.includes(fullname)) {
-            return [...prevUsers, fullname];
-          }
-        } else {
-          // Remove userId from the list
-          return prevUsers.filter((user) => user !== fullname);
-        }
-        return prevUsers; // Return previous state if no change needed
+      setTypingUsers((prev) =>
+        isTyping ? (prev.includes(fullname) ? prev : [...prev, fullname])
+                 : prev.filter((u) => u !== fullname)
+      );
+    });
+
+    socket.on("updateStyleBold", setBold);
+    socket.on("updateStyleItalic", setItalic);
+    socket.on("updateStyleUnderline", setUnderline);
+
+    return () => { socket.disconnect(); };
+  }, []); // chỉ chạy 1 lần khi mount
+
+  // ─── Join document khi loggedInUser load xong (nếu chưa join lúc connect) ───
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !loggedInUser || !documentId) return;
+    if (socket.connected) {
+      socket.emit("join-document", {
+        documentId,
+        fullname: loggedInUser.fullname,
+        email: loggedInUser.email,
       });
-    });
-
-    socket.on("updateStyleBold", (bold) => {
-      setBold(bold);
-    });
-    socket.on("updateStyleItalic", (italic) => {
-      setItalic(italic);
-    });
-    socket.on("updateStyleUnderline", (underline) => {
-      setUnderline(underline);
-    });
-
-    // Listen for 'new-document-created' event from the server
-    socket.on("save-document-success", (documentCreationData) => {
-      alert(`${documentCreationData.title} document saved successfully`);
-      navigate("/view-documents");
-    });
-
-    return () => {
-      // Clean up event listeners on component unmount
-      socket.off("received_message");
-      socket.off("document-content-update");
-      socket.off("typing_indicator");
-      socket.off("updateStyleBold");
-      socket.off("updateStyleItalic");
-      socket.off("updateStyleUnderline");
-      socket.off("save-document-success");
-
-      // socket.off("new-document-created");
-      // socket.disconnect();
-    };
-  }, [loggedInUser]); // Empty dependency array to run once on mount
-
-  console.log(JSON.stringify(typingUsers));
-  const sendMessage = () => {
-    if (inputMessage.trim() !== "") {
-      socket.emit("send_message", {
-        message: inputMessage,
-        room,
-      });
-      setInputMessage(""); // Clear input after sending message
     }
-  };
+    // Nếu chưa connected, sẽ join trong handler "connect" ở trên
+  }, [loggedInUser, documentId]);
 
-  const joinRoom = () => {
-    if (room !== "") {
-      socket.emit("join_room", room);
-    }
-  };
-
-  const handleTextAreaChange = (e) => {
+  // ─── Thay đổi nội dung → gửi delta ──────────────────────────────────────────
+  const handleContentChange = useCallback((e) => {
     const newContent = e.target.value;
-    setDocumentContent(newContent); // Update local document content
-    if (!isTyping) {
-      socket.emit("user_start_typing", {
-        roomId: room,
-        fullname: loggedInUserFullName,
-        email: loggedInUser.email,
-      });
-      setIsTyping(true);
+    const oldContent = contentRef.current;
+    const socket = socketRef.current;
+    const docId = documentIdRef.current;
+
+    if (!isRemote.current && docId && socket?.connected) {
+      const ops = diffToOperations(oldContent, newContent, docId, socket.id, revisionRef.current);
+      ops.forEach((op) => socket.emit("operation", op));
     }
-    socket.emit("edit-document", { room, content: newContent });
-  };
 
-  const handleTypingStopped = () => {
-    // Emit "user_start_typing" event to backend
-    if (isTyping) {
-      socket.emit("user_stop_typing", {
-        roomId: room,
-        fullname: loggedInUserFullName,
-        email: loggedInUser.email,
-      });
-      setIsTyping(false);
+    setContent(newContent);
+
+    // Typing indicator
+    clearTimeout(typingTimer.current);
+    const docId2 = documentIdRef.current;
+    socket?.emit("user_start_typing", { roomId: docId2, fullname: loggedInUser?.fullname, email: loggedInUser?.email });
+    typingTimer.current = setTimeout(() => {
+      socket?.emit("user_stop_typing", { roomId: docId2, fullname: loggedInUser?.fullname });
+    }, 1500);
+  }, [loggedInUser]);
+
+  // ─── Thay đổi tiêu đề → broadcast cho room ───────────────────────────────────
+  const handleTitleChange = useCallback((e) => {
+    const newTitle = e.target.value;
+    setTitle(newTitle);
+    const socket = socketRef.current;
+    const docId = documentIdRef.current;
+    if (docId && socket?.connected) {
+      socket.emit("title-change", { documentId: docId, title: newTitle });
     }
-  };
+  }, []);
 
-  const handleBold = () => {
-    const newBoldState = !bold;
-    setBold(newBoldState);
-    socket.emit("updateStyleBold", newBoldState);
-  };
+  // ─── Style ───────────────────────────────────────────────────────────────────
+  const handleBold = () => { const v = !bold; setBold(v); socketRef.current?.emit("updateStyleBold", { documentId, bold: v }); };
+  const handleItalic = () => { const v = !italic; setItalic(v); socketRef.current?.emit("updateStyleItalic", { documentId, italic: v }); };
+  const handleUnderline = () => { const v = !underline; setUnderline(v); socketRef.current?.emit("updateStyleUnderline", { documentId, underline: v }); };
 
-  const handleItalic = () => {
-    const newItalicState = !italic;
-    setItalic(newItalicState);
-    socket.emit("updateStyleItalic", newItalicState);
-  };
-
-  const handleUnderline = () => {
-    const newUnderlineState = !underline;
-    setUnderline(newUnderlineState);
-    socket.emit("updateStyleUnderline", newUnderlineState);
-  };
-
-  const handleViewDocument = () => {
-    navigate("/view-documents");
-  };
-
-  const handleSaveDocument = () => {
-    // Emit 'new-document' event with the document title and content
-    socket.emit("save-document", {
-      title: documentTitle,
-      content: documentContent,
-      clientId: socket.id,
-      fullname: loggedInUser.fullname,
-      email: loggedInUser.email,
+  // ─── Save ────────────────────────────────────────────────────────────────────
+  const handleSave = () => {
+    socketRef.current?.emit("save-document", {
+      documentId,
+      title,
+      content,
+      clientId: socketRef.current?.id,
+      fullname: loggedInUser?.fullname,
+      email: loggedInUser?.email,
     });
   };
 
-  const handleCreateNewDocument = () => {
-    setDocumentTitle("");
-    setDocumentContent("");
-    alert(`Good to go, Here is your fresh document...`);
+  // ─── Copy share link ─────────────────────────────────────────────────────────
+  const handleCopyLink = () => {
+    if (!documentId) { toast.warning("Lưu tài liệu trước để tạo link!"); return; }
+    navigator.clipboard.writeText(`${window.location.origin}/editor/${documentId}`);
+    toast.success("Đã copy link chia sẻ!");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-400  to-blue-100">
+    <div className="min-h-screen bg-gradient-to-r from-blue-400 to-blue-100">
       <Header />
       <div className="container mx-auto px-4 py-8 md:w-3/4 bg-gradient-to-r from-purple-500 to-purple-300 rounded-lg shadow-lg">
-        <p className="mb-4 font-bold text-center">
-          Client Name: {loggedInUserFullName}
-        </p>
-        <div className="mb-4 flex flex-col md:flex-row items-center justify-between">
-          <input
-            type="text"
-            className="w-full md:w-auto border rounded py-2 px-4 mb-2 md:mb-0 md:mr-2"
-            placeholder="Enter room number"
-            value={room}
-            onChange={(e) => setRoom(e.target.value)}
-          />
-          <button
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-            onClick={joinRoom}
-          >
-            Join Room
-          </button>
+
+        {/* Status bar */}
+        <div className="flex justify-between items-center mb-3 text-sm text-white">
+          <span className="font-bold">
+            👤 {loggedInUser?.fullname}
+            <span className={`ml-2 text-xs ${connected ? "text-green-300" : "text-red-300"}`}>
+              ● {connected ? "Đã kết nối" : "Đang kết nối..."}
+            </span>
+          </span>
+          <span>
+            🟢 {activeUsers} người đang chỉnh sửa
+            {lastSaved && <span className="ml-3 opacity-75">💾 {lastSaved}</span>}
+          </span>
+          <span className="opacity-75 text-xs">rev.{revision}</span>
         </div>
 
-        <div className="flex mb-4 justify-center">
+        {/* Share link */}
+        {documentId && (
+          <div className="flex items-center gap-2 mb-3 bg-white bg-opacity-20 rounded-lg px-3 py-2">
+            <span className="text-white text-xs flex-shrink-0">🔗</span>
+            <input
+              readOnly
+              value={`${window.location.origin}/editor/${documentId}`}
+              className="flex-1 text-xs bg-transparent text-white outline-none truncate"
+              onFocus={(e) => e.target.select()}
+            />
+            <button onClick={handleCopyLink} className="flex-shrink-0 bg-white text-purple-700 text-xs font-bold px-3 py-1 rounded-md hover:bg-purple-100">
+              Copy
+            </button>
+          </div>
+        )}
+
+        {/* Tiêu đề — đồng bộ real-time */}
+        <div className="mb-4">
           <input
             type="text"
             className="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
-            value={documentTitle}
-            onChange={(e) => setDocumentTitle(e.target.value)}
-            placeholder="Enter document title..."
-            style={{ maxWidth: "100%" }}
+            value={title}
+            onChange={handleTitleChange}
+            placeholder="Tiêu đề tài liệu..."
           />
         </div>
 
+        {/* Typing indicator */}
         {typingUsers.length > 0 && (
-          <p className="ml-5 text-center">
-            {typingUsers.length === 1
-              ? `${typingUsers[0]} is typing...`
-              : `${typingUsers.join(", ")} are typing...`}
-          </p>
+          <p className="text-center text-white text-sm mb-2">{typingUsers.join(", ")} đang gõ...</p>
         )}
 
-        <div className="flex justify-between mb-4 mt-6">
-          <div className="flex">
-            <button
-              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none"
-              onClick={() => handleBold()}
-            >
-              Bold
-            </button>
-            <button
-              className="ml-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none"
-              onClick={() => handleItalic()}
-            >
-              Italic
-            </button>
-            <button
-              className="ml-2 px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none"
-              onClick={() => handleUnderline()}
-            >
-              Underline
-            </button>
+        {/* Toolbar */}
+        <div className="flex justify-between mb-4">
+          <div className="flex gap-2">
+            <button className={`px-4 py-2 rounded-md text-white ${bold ? "bg-orange-800" : "bg-orange-600 hover:bg-orange-700"}`} onClick={handleBold}><b>B</b></button>
+            <button className={`px-4 py-2 rounded-md text-white ${italic ? "bg-green-800" : "bg-green-600 hover:bg-green-700"}`} onClick={handleItalic}><i>I</i></button>
+            <button className={`px-4 py-2 rounded-md text-white ${underline ? "bg-orange-800" : "bg-orange-600 hover:bg-orange-700"}`} onClick={handleUnderline}><u>U</u></button>
           </div>
-          <div>
-            <button
-              className="ml-2 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 focus:outline-none"
-              onClick={handleSaveDocument}
-            >
-              Save
-            </button>
-            <button
-              className="ml-2 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none"
-              onClick={handleViewDocument}
-            >
-              View All
-            </button>
-            <button
-              className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none"
-              onClick={handleCreateNewDocument}
-            >
-              Create New
-            </button>
+          <div className="flex gap-2">
+            <button className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600" onClick={handleSave}>💾 Lưu</button>
+            <button className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600" onClick={handleCopyLink}>🔗 Share</button>
+            <button className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600" onClick={() => navigate("/view-documents")}>📄 Danh sách</button>
           </div>
         </div>
 
+        {/* Nội dung — đồng bộ real-time */}
         <textarea
           className="w-full h-80 border border-gray-300 rounded-lg p-4 resize-none focus:outline-none focus:border-blue-500"
-          value={documentContent}
-          onChange={handleTextAreaChange}
-          onBlur={handleTypingStopped}
-          placeholder="Type your document content here..."
+          value={content}
+          onChange={handleContentChange}
+          placeholder="Bắt đầu gõ nội dung tài liệu..."
           style={{
             fontWeight: bold ? "bold" : "normal",
             fontStyle: italic ? "italic" : "normal",
             textDecoration: underline ? "underline" : "none",
           }}
         />
-
-        <div className="flex justify-between">
-          <input
-            type="text"
-            className="w-full md:w-auto border rounded py-2 px-4 mb-2 md:mb-0 md:mr-2"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="Type your message..."
-          />
-          <button
-            className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-            onClick={sendMessage}
-          >
-            Send
-          </button>
-        </div>
-
-        <h2 className="mt-6 mb-2 font-bold">Messages:</h2>
-        <ul>
-          {messagesReceived.map((msg, index) => (
-            <li key={index} className="bg-gray-200 p-2 rounded mb-2">
-              {msg}
-            </li>
-          ))}
-        </ul>
       </div>
     </div>
   );
 }
-
-export default Editor;

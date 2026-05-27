@@ -1,27 +1,35 @@
 import React, { useState } from "react";
 import { useAuth } from "./AuthProvider";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import Header from "./Header";
 import { validateFormData } from "../utilities/validate";
+import { toast } from "react-toastify";
 
 const Login = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const navigate = useNavigate(); // Get access to history object
-  const [errorMessage, setErrorMessage] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
+    const message = validateFormData(email, password);
+    if (message) { toast.error(message); return; }
+
+    setLoading(true);
     try {
-      const message = validateFormData(email, password);
-      setErrorMessage(message);
-      if (message) {
-        return;
-      }
       await login(email, password);
-      navigate("/editor"); // Redirect to editor route after successful login
+      toast.success("Đăng nhập thành công!");
+      const from = location.state?.from ?? "/view-documents";
+      navigate(from);
     } catch (error) {
-      setErrorMessage(error);
+      // Lấy string từ response, không render cả object error
+      const msg = error?.response?.data?.message ?? error?.message ?? "Đăng nhập thất bại";
+      const errorMsg = typeof msg === "string" ? msg : "Email hoặc mật khẩu không đúng";
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -30,7 +38,6 @@ const Login = () => {
       <Header />
       <div className="flex justify-center items-center h-screen bg-grey-700">
         <div className="max-w-screen-lg mx-auto p-4 bg-white rounded-lg shadow-lg flex items-center space-x-8">
-          {/* Left Section with Image */}
           <div className="w-1/2 h-full">
             <img
               className="object-cover w-full h-full rounded-lg"
@@ -39,17 +46,17 @@ const Login = () => {
             />
           </div>
 
-          {/* Right Section with Login Form */}
           <div className="w-1/2">
-            <h1 className="text-3xl font-bold mb-6">Login</h1>
+            <h1 className="text-3xl font-bold mb-6">Đăng nhập</h1>
 
             <div className="mb-4 relative">
               <input
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 placeholder="Email"
-                className="input-field p-4 mx-auto w-full"
+                className="input-field p-4 mx-auto w-full border rounded"
               />
             </div>
 
@@ -58,26 +65,24 @@ const Login = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="input-field p-4 mx-auto w-full "
+                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                placeholder="Mật khẩu"
+                className="input-field p-4 mx-auto w-full border rounded"
               />
             </div>
 
-            <p className="text-red-700 font-bold text-lg py-2">
-              {errorMessage}
-            </p>
-
             <button
               onClick={handleLogin}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-full w-full"
+              disabled={loading}
+              className="bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-full w-full"
             >
-              Login
+              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
 
             <p className="text-sm mt-4 text-center text-gray-600">
-              New here?{" "}
+              Chưa có tài khoản?{" "}
               <Link to="/register" className="text-blue-500 hover:underline">
-                Register now
+                Đăng ký ngay
               </Link>
             </p>
           </div>

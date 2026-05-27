@@ -31,7 +31,7 @@ let DocumentsGateway = class DocumentsGateway {
         console.log('Received new document:', documentData);
         await this.userService.mapClientIdToUserId(documentData.fullname, documentData.email, documentData.clientId);
         const user = await this.userService.getClientInfoByClientId(documentData.clientId);
-        const userId = user._id;
+        const userId = user._id.toString();
         const modifiedDocumentData = {
             title: documentData.title,
             content: documentData.content,

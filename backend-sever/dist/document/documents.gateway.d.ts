@@ -1,7 +1,7 @@
 import { OnGatewayConnection, OnGatewayDisconnect } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { DocumentService } from './document.service';
-import { UserService } from 'src/user/user.service';
+import { UserService } from "../user/user.service";
 export declare class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly documentsService;
     private readonly userService;

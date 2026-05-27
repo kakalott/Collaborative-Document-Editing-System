@@ -31,7 +31,7 @@ let UserService = UserService_1 = class UserService {
         const updateUserDto = {
             clientId,
         };
-        const mappedUser = await this.updateUser(fetchedUser._id, updateUserDto);
+        const mappedUser = await this.updateUser(fetchedUser._id.toString(), updateUserDto);
         console.log(mappedUser + '\n');
         return mappedUser;
     }

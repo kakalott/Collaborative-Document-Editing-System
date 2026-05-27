@@ -74,7 +74,7 @@ export class DocumentsGateway
     const user = await this.userService.getClientInfoByClientId(
       documentData.clientId,
     );
-    const userId = user._id;
+    const userId = user._id.toString();
 
     // Use documentData to create a new document in your service
     const modifiedDocumentData: DocumentDto = {

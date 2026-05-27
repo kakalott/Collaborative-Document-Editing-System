@@ -1,39 +1,45 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { validateFormData } from "../utilities/validate";
 import Header from "./Header";
 import { useAuth } from "./AuthProvider";
-import io from "socket.io-client";
-const socket = io("http://localhost:3000");
+import { toast } from "react-toastify";
 
 const Register = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const [formData, setFormData] = useState({
-    fullname: "",
-    email: "",
-    password: "",
-  });
-  const [errorMessage, setErrorMessage] = useState(null);
+  const [formData, setFormData] = useState({ fullname: "", email: "", password: "" });
+  const [loading, setLoading] = useState(false);
 
-  const toggleSignInForm = () => {
-    navigate("/"); // Navigate to login page if already registered
+  const validate = () => {
+    if (!formData.fullname.trim()) return "Vui lòng nhập họ tên";
+    if (!formData.email.trim()) return "Vui lòng nhập email";
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(formData.email)) return "Email không hợp lệ";
+    if (formData.password.length < 8) return "Mật khẩu phải có ít nhất 8 ký tự";
+    if (!/(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/.test(formData.password))
+      return "Mật khẩu cần có chữ hoa, chữ thường và số (VD: Abc12345)";
+    return null;
   };
 
-  const handleRegisterButtonClick = async () => {
-    const message = validateFormData(formData.email, formData.password);
-    setErrorMessage(message);
-    if (message) return;
-    const response = await register(formData);
-    console.log(JSON.stringify(response.data));
+  const handleRegister = async () => {
+    const error = validate();
+    if (error) { toast.error(error); return; }
 
-    // after registration immediately map new userId with websocket clientID
-    socket.emit("userid-to-clientId-map", {
-      fullname: response?.data?.fullname,
-      email: response.data.email,
-      clientId: socket.id,
-    });
-    navigate("/"); // Redirect to login page after successful registration
+    setLoading(true);
+    try {
+      await register(formData);
+      toast.success("Đăng ký thành công! Vui lòng đăng nhập.");
+      navigate("/"); // chuyển về login sau khi đăng ký thành công
+    } catch (err) {
+      const msg = err?.response?.data?.message;
+      if (msg?.includes("already exists")) {
+        toast.error("Email này đã được đăng ký. Vui lòng đăng nhập.");
+      } else {
+        toast.error(msg ?? "Đăng ký thất bại, thử lại sau.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,7 +47,7 @@ const Register = () => {
       <Header />
       <div className="flex justify-center items-center h-screen bg-grey-700">
         <div className="max-w-screen-lg mx-auto p-4 bg-white rounded-lg shadow-lg flex items-center space-x-8">
-          {/* Left Section with Image */}
+          {/* Ảnh bên trái */}
           <div className="w-1/2 h-full">
             <img
               className="object-cover w-full h-full rounded-lg"
@@ -50,70 +56,55 @@ const Register = () => {
             />
           </div>
 
-          {/* Right Section with Login Form */}
+          {/* Form bên phải */}
           <div className="w-1/2">
-            <h1 className="text-3xl font-bold mb-6">Registration</h1>
+            <h1 className="text-3xl font-bold mb-6">Đăng ký</h1>
 
-            <form onSubmit={(e) => e.preventDefault()}>
-              <div className="mb-4 relative">
-                <input
-                  value={formData.fullname}
-                  type="text"
-                  placeholder="Enter Full Name"
-                  className="input-field p-4 mx-auto w-full"
-                  onChange={(e) =>
-                    setFormData({ ...formData, fullname: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="mb-6 relative">
-                <input
-                  value={formData.email}
-                  type="text"
-                  placeholder="Email Address"
-                  className="input-field p-4 mx-auto w-full"
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="mb-4 relative">
-                <input
-                  value={formData.password}
-                  type="password"
-                  placeholder="Password"
-                  className="input-field p-4 mx-auto w-full "
-                  onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
-                  }
-                />
-              </div>
-
-              {errorMessage && (
-                <p className="text-red-700 font-bold text-lg py-2">
-                  {errorMessage}
-                </p>
-              )}
-
-              <button
-                onClick={handleRegisterButtonClick}
-                className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-full w-full"
-              >
-                Register
-              </button>
-
-              <p
-                onClick={toggleSignInForm}
-                className="text-sm mt-4 text-center text-gray-600"
-              >
-                Already registered?{" "}
-                <Link to="/register" className="text-blue-500 hover:underline">
-                  Sign in now
-                </Link>
+            <div className="mb-4">
+              <input
+                value={formData.fullname}
+                type="text"
+                placeholder="Họ và tên"
+                className="input-field p-4 mx-auto w-full border rounded"
+                onChange={(e) => setFormData({ ...formData, fullname: e.target.value })}
+              />
+            </div>
+            <div className="mb-4">
+              <input
+                value={formData.email}
+                type="email"
+                placeholder="Email"
+                className="input-field p-4 mx-auto w-full border rounded"
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+            <div className="mb-4">
+              <input
+                value={formData.password}
+                type="password"
+                placeholder="Mật khẩu (VD: Abc12345)"
+                className="input-field p-4 mx-auto w-full border rounded"
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường và số.
               </p>
-            </form>
+            </div>
+
+            <button
+              onClick={handleRegister}
+              disabled={loading}
+              className="bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-full w-full"
+            >
+              {loading ? "Đang đăng ký..." : "Đăng ký"}
+            </button>
+
+            <p className="text-sm mt-4 text-center text-gray-600">
+              Đã có tài khoản?{" "}
+              <Link to="/" className="text-blue-500 hover:underline">
+                Đăng nhập
+              </Link>
+            </p>
           </div>
         </div>
       </div>
