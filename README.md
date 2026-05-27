@@ -1,99 +1,470 @@
+# Collaborative Document Editing System
 
-INTRODUCTION -
---------------------------------------------------------------------------------------------------------
-In today's interconnected world, seamless collaboration on documents among multiple users is 
-essential for productivity and efficiency. The Real-Time Collaborative Document Editor is a 
-cutting-edge application designed to facilitate simultaneous editing of shared documents by 
-multiple users in real time. This project harnesses the power of modern web technologies, 
-including NestJS for the backend, WebSocket for real-time communication, and robust 
-authentication mechanisms to ensure data security and user privacy
+## Giới thiệu
 
+**Collaborative Document Editing System** là hệ thống hỗ trợ nhiều người dùng cùng chỉnh sửa tài liệu theo thời gian thực.
 
-KEY-FEATURES ->
---------------------------------------------------------------------------------------------------------
+Dự án được xây dựng với:
 
-  1. Real-Time Collaboration
-  2. Document & users management
-  3. Identification/mapping of websocket client with database user
-  4. Authentication & Authorization
-  5. Conflict Resolution
-  6. Persistence
-  7. Maintaining DTO’s (Data Transfer Object)
-  8. Class-Validator & Class-Transformer
+* Frontend: ReactJS + TailwindCSS
+* Backend: NestJS + Socket.IO
+* Database: MongoDB
+* Authentication: JWT
+* Real-time Communication: WebSocket / Socket.IO
+* Operational Transformation (OT): Đồng bộ chỉnh sửa tài liệu thời gian thực
 
-TECHNOLOGY STACK  ->
---------------------------------------------------------------------------------------------------------
+---
 
-  1. Frontend : ReactJS, state management(ContextAPI), TailwindCSS
-  2. Backend : NestJS, WebSockets Gateway, Socket.io-client, Mongoose, Mongo-Atlas, JWT(JSON web token - HMAC with SHA-256), Typescript
+# Tính năng chính
 
-PROJECT STRUCTURE ->
---------------------------------------------------------------------------------------------------------
+* Đăng ký tài khoản
+* Đăng nhập bằng JWT Authentication
+* Tạo tài liệu mới
+* Chỉnh sửa tài liệu thời gian thực
+* Đồng bộ nội dung giữa nhiều người dùng
+* Theo dõi trạng thái online/offline
+* Xem tài liệu
+* WebSocket realtime
+* Hệ thống OT (Operational Transformation)
 
-Realtime-collaborative-doc-editor/
+---
+
+# Cấu trúc thư mục
+
+```bash
+Collaborative-Document-Editing-System/
 │
-├── src/
-│ ├── app.module.ts // Main module
-│ ├── document/ // Document module
-│ │ ├── document.controller.ts // Document controller
-│ │ ├── document.service.ts // Document service
-│ │ ├── document.entity.ts // Document entity (Mongoose)
-│ │ └── document.module.ts // Document module definition
-│ │
-│ ├── auth/ // Authentication module
-│ │ ├── auth.controller.ts // Auth controller (login, register)
-│ │ ├── auth.service.ts // Auth service (JWT authentication)
-│ │ └── auth.module.ts // Auth module definition
-│ │ └── jwt.strategy.ts 
-│ │ └── guards
-│ │ ├── jwt-guards.auth.ts // JWT guard for authentication
-│ │
-│ ├── user/ // User module
-│ │ ├── user.controller.ts // User controller
-│ │ ├── user.service.ts // User service
-│ │ ├── user.entity.ts // User entity (Mongoose)
-│ │ └── user.module.ts // User module definition
-│ ├── socket.gateway.ts // WebSocket gateway
-│ │
-│ └── main.ts // Entry point for the application
-├── .env // Environment variables
-└── package.json // Project dependencies and scripts
+├── frontend-app/          # React Frontend
+│   ├── src/
+│   ├── public/
+│   └── build/
+│
+├── backend-sever/         # NestJS Backend
+│   ├── src/
+│   ├── dist/
+│   └── test/
+│
+└── README.md
+```
+
+---
+
+# Công nghệ sử dụng
+
+## Frontend
+
+* ReactJS
+* React Hooks
+* TailwindCSS
+* Axios
+* Socket.IO Client
+
+## Backend
+
+* NestJS
+* TypeScript
+* Socket.IO
+* JWT Authentication
+* MongoDB + Mongoose
+* WebSocket Gateway
+
+---
+
+# Yêu cầu môi trường
+
+Trước khi chạy dự án cần cài đặt:
+
+| Công cụ | Phiên bản đề xuất |
+| ------- | ----------------- |
+| Node.js | >= 18             |
+| npm     | >= 9              |
+| MongoDB | >= 6              |
+| Git     | Mới nhất          |
+
+Kiểm tra phiên bản:
+
+```bash
+node -v
+npm -v
+mongod --version
+```
+
+---
+
+# Clone dự án
+
+```bash
+git clone <repository-url>
+```
+
+Hoặc giải nén file rar nếu đã có source code.
+
+Sau đó di chuyển vào thư mục project:
+
+```bash
+cd Collaborative-Document-Editing-System
+```
+
+---
+
+# HƯỚNG DẪN CÀI ĐẶT LẦN ĐẦU
+
+## Bước 1: Cài dependencies cho Backend
+
+```bash
+cd backend-sever
+npm install
+```
+
+---
+
+## Bước 2: Cài dependencies cho Frontend
+
+Mở terminal mới:
+
+```bash
+cd frontend-app
+npm install
+```
+
+---
+
+# Cấu hình môi trường Backend
+
+Trong thư mục `backend-sever` tạo file:
+
+```bash
+.env
+```
+
+Ví dụ:
+
+```env
+PORT=3001
+MONGODB_URI=mongodb://127.0.0.1:27017/collaborative-editor
+JWT_SECRET=your_secret_key
+JWT_EXPIRES_IN=7d
+CLIENT_URL=http://localhost:3000
+```
+
+---
+
+# Khởi động MongoDB
+
+## Windows
+
+Nếu dùng MongoDB Community Server:
+
+```bash
+mongod
+```
+
+Hoặc mở MongoDB Compass nếu dùng Compass.
+
+---
+
+## Linux
+
+```bash
+sudo systemctl start mongod
+```
+
+Kiểm tra trạng thái:
+
+```bash
+sudo systemctl status mongod
+```
+
+---
+
+# Chạy dự án lần đầu
+
+## Chạy Backend
+
+Mở terminal:
+
+```bash
+cd backend-sever
+npm run start:dev
+```
+
+Backend mặc định chạy tại:
+
+```bash
+http://localhost:3001
+```
+
+---
+
+## Chạy Frontend
+
+Mở terminal khác:
+
+```bash
+cd frontend-app
+npm start
+```
+
+Frontend mặc định chạy tại:
+
+```bash
+http://localhost:3000
+```
+
+---
+
+# HƯỚNG DẪN CHẠY NHỮNG LẦN SAU
+
+Sau khi đã cài dependencies rồi thì KHÔNG cần chạy lại `npm install`.
+
+Chỉ cần:
+
+## Bước 1: Khởi động MongoDB
+
+```bash
+mongod
+```
+
+Hoặc:
+
+```bash
+sudo systemctl start mongod
+```
+
+---
+
+## Bước 2: Chạy Backend
+
+```bash
+cd backend-sever
+npm run start:dev
+```
+
+---
+
+## Bước 3: Chạy Frontend
+
+```bash
+cd frontend-app
+npm start
+```
+
+---
+
+# Build Production
+
+## Frontend
+
+```bash
+cd frontend-app
+npm run build
+```
+
+Sau khi build xong sẽ tạo thư mục:
+
+```bash
+frontend-app/build
+```
+
+---
+
+## Backend
+
+```bash
+cd backend-sever
+npm run build
+```
+
+Sau khi build sẽ tạo thư mục:
+
+```bash
+backend-sever/dist
+```
+
+---
+
+# Scripts thường dùng
+
+## Frontend
+
+```bash
+npm start          # Chạy development
+npm run build      # Build production
+npm test           # Chạy test
+```
 
 
-VIDEO-DEMO URL ->
---------------------------------------------------------------------------------------------------------
+## Backend
+
+```bash
+npm run start:dev  # Chạy development
+npm run build      # Build production
+npm run start      # Chạy production
+npm run test       # Chạy test
+```
 
 
-  1. Frontend :
-      
-       Part 1 - https://www.loom.com/share/ef97f7ba1e16435baf3506f7e2333ab8?sid=9ab4cb8c-39a9-48ea-9cde-c55c023b6e76
+# Kiến trúc hệ thống
 
-       Part 2 - https://www.loom.com/share/db0d9a09a1a64a1196e2fb717db1fea2?sid=82fe327b-9ff7-4d4b-88e8-871ac0c95c7b
-     
-  3. Backend :
-                https://www.loom.com/share/d32ac1f69e454fbab57841eb05fe958a?sid=1b64a82b-9707-4481-908b-3f087d283069
+## Frontend
 
-PROJECT SNAPSHOTS ->
---------------------------------------------------------------------------------------------------------
+Frontend chịu trách nhiệm:
 
-
-
-![Screenshot (19)](https://github.com/tikhepooja11/Realtime-collaborative-document-editing-app/assets/47672660/4e9c93d3-9b8d-4170-8683-41b3c9cdf44d)
+* Giao diện người dùng
+* Authentication
+* Editor UI
+* Kết nối WebSocket
+* Hiển thị tài liệu realtime
 
 
-![Screenshot (21)](https://github.com/tikhepooja11/Realtime-collaborative-document-editing-app/assets/47672660/d8d46bcc-af22-40d3-964e-707766b51522)
+## Backend
+
+Backend chịu trách nhiệm:
+
+* Authentication API
+* Quản lý người dùng
+* Quản lý tài liệu
+* WebSocket Gateway
+* Đồng bộ realtime
+* OT Engine
 
 
-![Screenshot (22)](https://github.com/tikhepooja11/Realtime-collaborative-document-editing-app/assets/47672660/37f102ba-e5d4-4083-8b7f-660db28e2cb9)
+# Các module Backend
+
+## Auth Module
+
+Xử lý:
+
+* Đăng nhập
+* Đăng ký
+* JWT
+* Authorization
 
 
-![Screenshot (26)](https://github.com/tikhepooja11/Realtime-collaborative-document-editing-app/assets/47672660/bec637a6-c544-4f26-877b-5cd6dc594647)
+## Document Module
+
+Xử lý:
+
+* CRUD tài liệu
+* Đồng bộ dữ liệu
+* Lưu tài liệu
 
 
-![Screenshot (28)](https://github.com/tikhepooja11/Realtime-collaborative-document-editing-app/assets/47672660/ee8a2558-3320-40be-9f96-b40d3f5e2c16)
+## Socket Gateway
+
+Xử lý:
+
+* WebSocket connection
+* Real-time editing
+* Broadcast dữ liệu
 
 
-![Screenshot (33)](https://github.com/tikhepooja11/Realtime-collaborative-document-editing-app/assets/47672660/b7bea3c8-584d-4247-924f-dbe96bc2bd24)
+## OT Engine
+
+Xử lý:
+
+* Operational Transformation
+* Resolve conflict khi nhiều user cùng sửa
+* Đồng bộ nội dung
 
 
-![Screenshot (35)](https://github.com/tikhepooja11/Realtime-collaborative-document-editing-app/assets/47672660/179da481-b196-410e-a4ce-d56cd1b43442)
+# Các component Frontend
+
+| Component       | Chức năng              |
+| --------------- | ---------------------- |
+| Login.js        | Đăng nhập              |
+| Register.js     | Đăng ký                |
+| Editor.js       | Soạn thảo tài liệu     |
+| ViewDocument.js | Xem tài liệu           |
+| Header.js       | Thanh điều hướng       |
+| AuthProvider.js | Quản lý authentication |
+
+---
+
+# Luồng hoạt động hệ thống
+
+1. Người dùng đăng nhập
+2. Frontend nhận JWT token
+3. Kết nối WebSocket tới server
+4. Người dùng mở tài liệu
+5. Nội dung được đồng bộ realtime
+6. OT Engine xử lý xung đột chỉnh sửa
+7. Dữ liệu được lưu vào MongoDB
+
+
+# Một số lỗi thường gặp
+
+## 1. Port already in use
+
+Lỗi:
+
+```bash
+EADDRINUSE
+```
+
+Cách xử lý:
+
+Đổi PORT trong file `.env`
+
+Hoặc kill process đang dùng port.
+
+
+## 2. MongoDB connection failed
+
+Kiểm tra:
+
+* MongoDB đã chạy chưa
+* URI trong `.env` đúng chưa
+
+Ví dụ:
+
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/collaborative-editor
+```
+
+## 3. npm install bị lỗi
+
+Xóa:
+
+```bash
+node_modules
+package-lock.json
+```
+
+Sau đó cài lại:
+
+```bash
+npm install
+```
+
+
+## 4. Frontend không kết nối được Backend
+
+Kiểm tra:
+
+* Backend đã chạy chưa
+* URL API đúng chưa
+* CORS đã bật chưa
+* Port frontend/backend có đúng không
+
+
+# Hướng phát triển tương lai
+
+* Rich Text Editor
+* Comment realtime
+* Version history
+* Chia sẻ tài liệu bằng link
+* Permission editor/viewer
+* Dark mode
+* Export PDF/DOCX
+* Collaborative cursor
+* Google Docs style presence
+
+Dự án được phát triển nhằm mục đích:
+
+* Học tập
+* Nghiên cứu hệ thống realtime
+* Tìm hiểu Operational Transformation
+* Tìm hiểu WebSocket
+* Thực hành React + NestJS
+
