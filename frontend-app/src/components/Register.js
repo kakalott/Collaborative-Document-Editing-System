@@ -46,19 +46,8 @@ const Register = () => {
     <div>
       <Header />
       <div className="flex justify-center items-center h-screen bg-grey-700">
-        <div className="max-w-screen-lg mx-auto p-4 bg-white rounded-lg shadow-lg flex items-center space-x-8">
-          {/* Ảnh bên trái */}
-          <div className="w-1/2 h-full">
-            <img
-              className="object-cover w-full h-full rounded-lg"
-              src="https://media.licdn.com/dms/image/D4D12AQE5tHC0fWyEyg/article-cover_image-shrink_720_1280/0/1692376418099?e=2147483647&v=beta&t=bsGV3H8crWFb9noVTa3otA7J5T-lUW_CHGtGDsgAvWU"
-              alt="background"
-            />
-          </div>
-
-          {/* Form bên phải */}
-          <div className="w-1/2">
-            <h1 className="text-3xl font-bold mb-6">Đăng ký</h1>
+        <div className="max-w-md w-full mx-auto p-6 bg-white rounded-lg shadow-lg">
+          <h1 className="text-3xl font-bold mb-6">Đăng ký</h1>
 
             <div className="mb-4">
               <input
